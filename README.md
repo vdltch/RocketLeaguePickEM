@@ -33,6 +33,26 @@ Copier `.env.example` vers `.env` puis ajuster si besoin.
 - `JWT_SECRET=change-me-in-production`
 - `VITE_API_URL=http://localhost:4000/api`
 
+## Deployment Proxmox (Ubuntu 22.04)
+
+Script de setup complet:
+
+`scripts/proxmox-ubuntu22-setup.sh`
+
+Exemple d'utilisation sur la VM:
+
+```bash
+sudo bash scripts/proxmox-ubuntu22-setup.sh \
+  --app-dir /var/www/html/rocketleague-pickem \
+  --app-user ubuntu \
+  --domain _
+```
+
+Pré-requis:
+
+- le code du projet doit déjà être présent dans `--app-dir`
+- lancer en `root/sudo`
+
 ## Fonctionnalites
 
 - Accueil e-sport Rocket League

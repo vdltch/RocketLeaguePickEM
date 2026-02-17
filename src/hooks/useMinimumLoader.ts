@@ -2,21 +2,21 @@ import { useEffect, useRef, useState } from 'react'
 
 export const useMinimumLoader = (isLoading: boolean, minimumMs = 1200) => {
   const [showLoader, setShowLoader] = useState(isLoading)
-  const startedAtRef = useRef<number | null>(isLoading ? Date.now() : null)
+  const startedAtRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (isLoading) {
       if (startedAtRef.current === null) {
         startedAtRef.current = Date.now()
       }
-      setShowLoader(true)
-      return
+      const showTimer = setTimeout(() => setShowLoader(true), 0)
+      return () => clearTimeout(showTimer)
     }
 
     const startedAt = startedAtRef.current
     if (startedAt === null) {
-      setShowLoader(false)
-      return
+      const hideNowTimer = setTimeout(() => setShowLoader(false), 0)
+      return () => clearTimeout(hideNowTimer)
     }
 
     const elapsed = Date.now() - startedAt

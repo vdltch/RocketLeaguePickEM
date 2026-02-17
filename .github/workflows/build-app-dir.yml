@@ -1,0 +1,48 @@
+name: Build In App Dir
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      app_dir:
+        description: "Absolute app dir used for build"
+        required: false
+        default: "/var/www/html/rocketleague-pickem"
+      node_major:
+        description: "Node major version"
+        required: false
+        default: "22"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    env:
+      APP_DIR: ${{ github.event.inputs.app_dir || '/var/www/html/rocketleague-pickem' }}
+      NODE_MAJOR: ${{ github.event.inputs.node_major || '22' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_MAJOR }}
+          cache: npm
+
+      - name: Prepare app dir
+        run: |
+          sudo mkdir -p "$APP_DIR"
+          sudo rsync -a --delete --exclude ".git" "$GITHUB_WORKSPACE/" "$APP_DIR/"
+          sudo chown -R "$USER:$USER" "$APP_DIR"
+
+      - name: Install dependencies
+        working-directory: ${{ env.APP_DIR }}
+        run: npm ci
+
+      - name: Build
+        working-directory: ${{ env.APP_DIR }}
+        run: npm run build
