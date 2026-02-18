@@ -31,6 +31,7 @@ export type Tournament = {
   bracket?: Bracket
   swissBracket?: Bracket
   swissGroups?: SwissGroup[]
+  teamProfiles?: TournamentTeamProfile[]
 }
 
 export type NewsItem = {
@@ -88,4 +89,12 @@ export type SwissGroup = {
   name: string
   standings: SwissGroupStanding[]
   matches: SwissGroupMatch[]
+}
+
+export type TournamentTeamProfile = {
+  team: string
+  region: 'EU' | 'NA' | 'SAM' | 'MENA' | 'OCE' | 'APAC' | 'INTL'
+  players: string[]
+  coaches: string[]
+  substitutes?: string[]
 }

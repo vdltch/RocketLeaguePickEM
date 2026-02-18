@@ -1,4 +1,4 @@
-import type { Bracket, BracketSlot, Tournament } from '../types/esport'
+import type { Bracket, BracketSlot, Tournament, TournamentTeamProfile } from '../types/esport'
 import { buildSwiss16Bracket } from '../data/bracketTemplates'
 import { buildSwissGroupsFromPools, buildSwissGroupsFromTeams, defaultSwissPools } from '../data/swissTemplates'
 
@@ -215,6 +215,99 @@ const extractGroupMatchesFromWikitext = (content: string) => {
   return result
 }
 
+const extractTemplateBlocks = (content: string, templateName: string) => {
+  const blocks: string[] = []
+  const needle = `{{${templateName}`
+  let cursor = 0
+
+  while (cursor < content.length) {
+    const start = content.indexOf(needle, cursor)
+    if (start < 0) {
+      break
+    }
+
+    let depth = 0
+    let end = -1
+    for (let i = start; i < content.length - 1; i += 1) {
+      const pair = content.slice(i, i + 2)
+      if (pair === '{{') {
+        depth += 1
+        i += 1
+        continue
+      }
+      if (pair === '}}') {
+        depth -= 1
+        i += 1
+        if (depth === 0) {
+          end = i + 1
+          break
+        }
+      }
+    }
+
+    if (end > start) {
+      blocks.push(content.slice(start, end))
+      cursor = end
+    } else {
+      cursor = start + needle.length
+    }
+  }
+
+  return blocks
+}
+
+const parseTemplateField = (block: string, key: string) => {
+  const match = block.match(new RegExp(`\\|${key}=([^\\n|}]+)`))
+  return match ? cleanWikiText(match[1]) : ''
+}
+
+const mapFlagToRegion = (
+  flag: string,
+): 'EU' | 'NA' | 'SAM' | 'MENA' | 'OCE' | 'APAC' | 'INTL' => {
+  const normalized = normalizeTeamKey(flag)
+  if (normalized === 'eu') return 'EU'
+  if (normalized === 'sam') return 'SAM'
+  if (normalized === 'mena') return 'MENA'
+  if (normalized === 'oce') return 'OCE'
+  if (normalized === 'asia' || normalized === 'apac') return 'APAC'
+  if (normalized === 'usca' || normalized === 'na' || normalized === 'us' || normalized === 'ca') return 'NA'
+  return 'INTL'
+}
+
+const parseTeamCardsFromWikitext = (content: string): TournamentTeamProfile[] => {
+  const blocks = extractTemplateBlocks(content, 'TeamCard')
+  const profiles: TournamentTeamProfile[] = []
+
+  for (const block of blocks) {
+    const rawTeam = parseTemplateField(block, 'team')
+    if (!rawTeam) {
+      continue
+    }
+
+    const team = displayTeamName(rawTeam)
+    const region = mapFlagToRegion(parseTemplateField(block, 'flag'))
+    const players = ['p1', 'p2', 'p3', 'p4', 'p5']
+      .map((key) => parseTemplateField(block, key))
+      .filter((value) => value.length > 0 && value.toLowerCase() !== 'tbd')
+    const coaches = ['c', 'c1', 'c2']
+      .map((key) => parseTemplateField(block, key))
+      .filter((value) => value.length > 0 && value.toLowerCase() !== 'tbd')
+    const substitutes = ['s1', 's2', 's3', 's4', 's5']
+      .map((key) => parseTemplateField(block, key))
+      .filter((value) => value.length > 0 && value.toLowerCase() !== 'tbd')
+
+    profiles.push({
+      team,
+      region,
+      players: Array.from(new Set(players)),
+      coaches: Array.from(new Set(coaches)),
+      substitutes: Array.from(new Set(substitutes)),
+    })
+  }
+
+  return profiles
+}
+
 const buildMajorBracket = (content: string): Bracket => {
   const required = ['R1M1', 'R1M2', 'R2M1', 'R2M2', 'R2M3', 'R2M4', 'R3M1', 'R3M2', 'R4M1']
 
@@ -362,6 +455,7 @@ const parseTournament = (page: {
   const teams = extractTeamsFromWikitext(content)
   const poolsFromApi = extractGroupPoolsFromWikitext(content)
   const matchesByGroup = extractGroupMatchesFromWikitext(content)
+  const teamProfiles = parseTeamCardsFromWikitext(content)
   const swissGroups = poolsFromApi
     ? buildSwissGroupsFromPools(poolsFromApi).map((group) => {
         const exactMatches = matchesByGroup[group.name]
@@ -396,6 +490,7 @@ const parseTournament = (page: {
     bracket,
     swissBracket,
     swissGroups,
+    teamProfiles,
   }
 }
 

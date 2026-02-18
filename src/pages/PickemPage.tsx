@@ -8,6 +8,8 @@ import { SwissGroupsBoard } from '../components/pickem/SwissGroupsBoard'
 import { useMinimumLoader } from '../hooks/useMinimumLoader'
 import { useTournaments } from '../hooks/useEsportData'
 import { usePickemStore } from '../store/pickemStore'
+import { resolveTeamProfile } from '../data/teamProfiles'
+import type { TournamentTeamProfile } from '../types/esport'
 
 type PickemTab = 'swiss' | 'playoffs'
 
@@ -43,6 +45,53 @@ export const PickemPage = () => {
     () => tournamentsQuery.data?.find((item) => item.id === selectedTournamentId),
     [selectedTournamentId, tournamentsQuery.data],
   )
+  const tournamentTeams = useMemo(() => {
+    if (!tournament) {
+      return []
+    }
+
+    const seen = new Set<string>()
+    const ordered: string[] = []
+    const add = (name: string) => {
+      if (!name || name.toLowerCase() === 'tbd' || seen.has(name)) {
+        return
+      }
+      seen.add(name)
+      ordered.push(name)
+    }
+
+    for (const group of tournament.swissGroups ?? []) {
+      for (const standing of group.standings) {
+        add(standing.team)
+      }
+    }
+
+    for (const stage of tournament.stages) {
+      for (const match of stage.matches) {
+        add(match.teamA.name)
+        add(match.teamB.name)
+      }
+    }
+
+    return ordered
+  }, [tournament])
+  const tournamentTeamProfiles = useMemo(() => {
+    const normalize = (value: string) =>
+      value
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+
+    const map = new Map<string, TournamentTeamProfile>()
+    for (const item of tournament?.teamProfiles ?? []) {
+      map.set(normalize(item.team), item)
+    }
+    return {
+      get: (teamName: string) => map.get(normalize(teamName)),
+    }
+  }, [tournament?.teamProfiles])
 
   const toScopedId = useCallback(
     (tab: PickemTab, matchId: string) => `${selectedTournamentId}:${tab}:${matchId}`,
@@ -244,6 +293,61 @@ export const PickemPage = () => {
           </button>
         </div>
       </GlassCard>
+
+      {tournamentTeams.length > 0 ? (
+        <GlassCard>
+          <div className="row split">
+            <div>
+              <h3>Teams du tournoi selectionne</h3>
+              <p>{tournamentTeams.length} equipes detectees pour ce tournoi 2026.</p>
+            </div>
+          </div>
+
+          <div className="pickem-teams-grid">
+            {tournamentTeams.map((teamName) => {
+              const profile = resolveTeamProfile(teamName)
+              const liveProfile = tournamentTeamProfiles.get(teamName)
+              const players: string[] = liveProfile?.players?.length ? liveProfile.players : profile.players
+              const coaches: string[] = liveProfile?.coaches?.length ? liveProfile.coaches : [profile.coach]
+              const substitutes: string[] = liveProfile?.substitutes?.length ? liveProfile.substitutes : []
+              const region = liveProfile?.region ?? profile.region
+              return (
+                <article key={teamName} className="pickem-team-card" tabIndex={0}>
+                  <div
+                    className="pickem-team-logo"
+                    style={{ background: `linear-gradient(140deg, ${profile.logoFrom}, ${profile.logoTo})` }}
+                  >
+                    {profile.logoUrl ? (
+                      <img
+                        src={profile.logoUrl}
+                        alt={`Logo ${teamName}`}
+                        loading="lazy"
+                        onError={(event) => {
+                          event.currentTarget.style.display = 'none'
+                        }}
+                      />
+                    ) : (
+                      <span>{profile.logoText}</span>
+                    )}
+                  </div>
+                  <div className="pickem-team-main">
+                    <strong>{teamName}</strong>
+                    <p>
+                      {region} - Coach: {coaches.join(', ')}
+                    </p>
+                  </div>
+                  <div className="pickem-team-hover-panel">
+                    <h4>Joueurs</h4>
+                    <p>{players.join(' • ')}</p>
+                    {substitutes.length > 0 ? <p>Sub: {substitutes.join(' • ')}</p> : null}
+                    <p>Coach: {coaches.join(', ')}</p>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        </GlassCard>
+      ) : null}
 
       <div className="tab-nav" role="tablist" aria-label="Choix du mode Pick em">
         <button

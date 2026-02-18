@@ -7,6 +7,7 @@ import { LeaderboardPage } from '../pages/LeaderboardPage'
 import { NewsPage } from '../pages/NewsPage'
 import { LoginPage } from '../pages/LoginPage'
 import { RegisterPage } from '../pages/RegisterPage'
+import { TeamsPage } from '../pages/TeamsPage'
 
 export const router = createBrowserRouter([
   {
@@ -15,6 +16,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       { path: 'tournois', element: <TournamentsPage /> },
+      { path: 'teams', element: <TeamsPage /> },
       { path: 'pickem', element: <PickemPage /> },
       { path: 'classement', element: <LeaderboardPage /> },
       { path: 'actualites', element: <NewsPage /> },
