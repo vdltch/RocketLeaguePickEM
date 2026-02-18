@@ -1,4 +1,4 @@
-name: Build In App Dir
+name: Build And Deploy
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
       app_dir:
         description: "Absolute app dir used for build"
         required: false
-        default: "/var/www/html/rocketleague-pickem"
+        default: "/var/www/html/RocketLeaguePickEM"
       node_major:
         description: "Node major version"
         required: false
@@ -20,7 +20,7 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     env:
-      APP_DIR: ${{ github.event.inputs.app_dir || '/var/www/html/rocketleague-pickem' }}
+      APP_DIR: ${{ github.event.inputs.app_dir || '/var/www/html/RocketLeaguePickEM' }}
       NODE_MAJOR: ${{ github.event.inputs.node_major || '22' }}
 
     steps:
@@ -33,16 +33,45 @@ jobs:
           node-version: ${{ env.NODE_MAJOR }}
           cache: npm
 
-      - name: Prepare app dir
-        run: |
-          sudo mkdir -p "$APP_DIR"
-          sudo rsync -a --delete --exclude ".git" "$GITHUB_WORKSPACE/" "$APP_DIR/"
-          sudo chown -R "$USER:$USER" "$APP_DIR"
-
       - name: Install dependencies
-        working-directory: ${{ env.APP_DIR }}
         run: npm ci
 
       - name: Build
-        working-directory: ${{ env.APP_DIR }}
         run: npm run build
+
+  deploy:
+    needs: build
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    env:
+      APP_DIR: ${{ github.event.inputs.app_dir || '/var/www/html/RocketLeaguePickEM' }}
+    steps:
+      - name: Deploy on Proxmox CT via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.PROXMOX_HOST }}
+          username: ${{ secrets.PROXMOX_USER }}
+          key: ${{ secrets.PROXMOX_SSH_KEY }}
+          port: ${{ secrets.PROXMOX_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            APP_DIR="${APP_DIR}"
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "Repo absent in $APP_DIR. Clone it first on the CT."
+              exit 1
+            fi
+
+            cd "$APP_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+            npm ci
+            npm run build
+
+            sudo systemctl restart rocketleague-pickem-api
+            sudo systemctl restart rocketleague-pickem-web
+            sudo systemctl restart apache2
+
+            curl -fsS http://127.0.0.1:4000/api/health >/dev/null
+            curl -fsS http://127.0.0.1:4173 >/dev/null
