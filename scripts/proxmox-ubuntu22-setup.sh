@@ -21,7 +21,7 @@ set -Eeuo pipefail
 #   --node-major 22
 #   --skip-apache
 
-APP_DIR="/var/www/html/rocketleague-pickem"
+APP_DIR="/var/www/html/"
 APP_USER="ubuntu"
 DOMAIN="_"
 API_PORT="4000"
