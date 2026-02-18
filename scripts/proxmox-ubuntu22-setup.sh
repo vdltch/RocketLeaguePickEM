@@ -22,7 +22,7 @@ set -Eeuo pipefail
 #   --skip-apache
 
 APP_DIR="/var/www/html/"
-APP_USER="ubuntu"
+APP_USER="root"
 DOMAIN="_"
 API_PORT="4000"
 WEB_PORT="4173"
