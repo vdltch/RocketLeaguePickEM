@@ -48,15 +48,18 @@ jobs:
     steps:
       - name: Deploy on Proxmox CT via SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          APP_DIR: ${{ env.APP_DIR }}
         with:
           host: ${{ secrets.PROXMOX_HOST }}
           username: ${{ secrets.PROXMOX_USER }}
           key: ${{ secrets.PROXMOX_SSH_KEY }}
           port: ${{ secrets.PROXMOX_SSH_PORT || 22 }}
+          envs: APP_DIR
           script_stop: true
           script: |
             set -euo pipefail
-            APP_DIR="${APP_DIR}"
+            APP_DIR="${APP_DIR:-/var/www/html/RocketLeaguePickEM}"
 
             if [ ! -d "$APP_DIR/.git" ]; then
               echo "Repo absent in $APP_DIR. Clone it first on the CT."
