@@ -76,5 +76,34 @@ jobs:
             sudo systemctl restart rocketleague-pickem-web
             sudo systemctl restart apache2
 
-            curl -fsS http://127.0.0.1:4000/api/health >/dev/null
-            curl -fsS http://127.0.0.1:4173 >/dev/null
+            API_OK=0
+            for i in $(seq 1 20); do
+              if curl -fsS http://127.0.0.1:4000/api/health >/dev/null; then
+                API_OK=1
+                break
+              fi
+              sleep 1
+            done
+
+            if [ "$API_OK" -ne 1 ]; then
+              echo "API healthcheck failed after restart."
+              sudo systemctl status rocketleague-pickem-api --no-pager || true
+              sudo journalctl -u rocketleague-pickem-api -n 120 --no-pager || true
+              exit 1
+            fi
+
+            WEB_OK=0
+            for i in $(seq 1 20); do
+              if curl -fsS http://127.0.0.1:4173 >/dev/null; then
+                WEB_OK=1
+                break
+              fi
+              sleep 1
+            done
+
+            if [ "$WEB_OK" -ne 1 ]; then
+              echo "Web healthcheck failed after restart."
+              sudo systemctl status rocketleague-pickem-web --no-pager || true
+              sudo journalctl -u rocketleague-pickem-web -n 120 --no-pager || true
+              exit 1
+            fi
