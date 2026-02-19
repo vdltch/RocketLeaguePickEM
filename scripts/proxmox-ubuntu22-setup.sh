@@ -11,7 +11,7 @@ set -Eeuo pipefail
 #    - /api     -> backend  (localhost:4000)
 #
 # Usage:
-#   sudo bash scripts/proxmox-ubuntu22-setup.sh --app-dir /var/www/html/rocketleague-pickem
+#   sudo bash scripts/proxmox-ubuntu22-setup.sh --app-dir /var/www/html/RocketLeaguePickEM
 #
 # Optional:
 #   --domain example.com
@@ -22,7 +22,7 @@ set -Eeuo pipefail
 #   --node-major 22
 #   --skip-apache
 
-APP_DIR="/var/www/html/"
+APP_DIR="/var/www/html/RocketLeaguePickEM"
 APP_USER="root"
 DOMAIN="_"
 API_PORT="4000"
@@ -74,7 +74,9 @@ chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
 
 if [[ ! -f "${APP_DIR}/package.json" ]]; then
   echo "No package.json found in ${APP_DIR}."
-  echo "Copy your project there first (git clone / rsync), then re-run this script."
+  echo "Expected an existing project checkout there."
+  echo "Current host example: /var/www/html/RocketLeaguePickEM"
+  echo "If needed, pass --app-dir with the real path."
   exit 1
 fi
 

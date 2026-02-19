@@ -44,7 +44,7 @@ Exemple d'utilisation sur la VM:
 
 ```bash
 sudo bash scripts/proxmox-ubuntu22-setup.sh \
-  --app-dir /var/www/html/rocketleague-pickem \
+  --app-dir /var/www/html/RocketLeaguePickEM \
   --app-user ubuntu \
   --domain _ \
   --results-sync-ms 120000
