@@ -59,13 +59,22 @@ const resultsSchema = z.object({
   ),
 })
 
+const tournamentIdAliases = {
+  'rlcs-2026-boston-major': 'rlcs-2026-boston-major-1',
+  'rlcs-2026-boston-major-1': 'rlcs-2026-boston-major-1',
+  'rlcs-2026-paris-major': 'rlcs-2026-paris-major-2',
+  'rlcs-2026-paris-major-2': 'rlcs-2026-paris-major-2',
+}
+
+const normalizeTournamentId = (tournamentId) => tournamentIdAliases[tournamentId] ?? tournamentId
+
 const tournamentStartDates = {
   'rlcs-2026-boston-major-1': '2026-02-19',
   'rlcs-2026-paris-major-2': '2026-05-20',
 }
 
 const getTournamentLockDate = (tournamentId) => {
-  const startDate = tournamentStartDates[tournamentId]
+  const startDate = tournamentStartDates[normalizeTournamentId(tournamentId)]
   if (!startDate) {
     return null
   }
@@ -191,7 +200,7 @@ app.get('/api/auth/me', authRequired(jwtSecret), async (req, res) => {
 })
 
 app.get('/api/picks', authRequired(jwtSecret), async (req, res) => {
-  const tournamentId = String(req.query.tournamentId ?? '')
+  const tournamentId = normalizeTournamentId(String(req.query.tournamentId ?? ''))
   const tab = String(req.query.tab ?? '')
   if (!tournamentId || (tab !== 'swiss' && tab !== 'playoffs')) {
     return res.json({ picks: [] })
@@ -207,7 +216,7 @@ app.get('/api/picks', authRequired(jwtSecret), async (req, res) => {
 })
 
 app.get('/api/results', async (req, res) => {
-  const tournamentId = String(req.query.tournamentId ?? '')
+  const tournamentId = normalizeTournamentId(String(req.query.tournamentId ?? ''))
   const tab = String(req.query.tab ?? '')
   if (!tournamentId || (tab !== 'swiss' && tab !== 'playoffs')) {
     return res.json({ results: [] })
@@ -241,7 +250,8 @@ app.put('/api/picks', authRequired(jwtSecret), async (req, res) => {
     return res.status(400).json({ error: 'Donnees invalides', details: parsed.error.issues })
   }
 
-  const { tournamentId, tab, picks } = parsed.data
+  const tournamentId = normalizeTournamentId(parsed.data.tournamentId)
+  const { tab, picks } = parsed.data
   if (isTournamentLocked(tournamentId)) {
     const lockDate = getTournamentLockDate(tournamentId)
     const isoDate = lockDate ? lockDate.toISOString().slice(0, 10) : tournamentId
@@ -283,7 +293,8 @@ app.put('/api/results', authRequired(jwtSecret), async (req, res) => {
     return res.status(400).json({ error: 'Donnees invalides', details: parsed.error.issues })
   }
 
-  const { tournamentId, tab, results } = parsed.data
+  const tournamentId = normalizeTournamentId(parsed.data.tournamentId)
+  const { tab, results } = parsed.data
   await db.exec('BEGIN')
   try {
     for (const result of results) {
