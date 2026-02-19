@@ -46,7 +46,8 @@ Exemple d'utilisation sur la VM:
 sudo bash scripts/proxmox-ubuntu22-setup.sh \
   --app-dir /var/www/html/RocketLeaguePickEM \
   --app-user ubuntu \
-  --domain _ \
+  --domain rlpick.vicode.agency \
+  --origin-scheme https \
   --results-sync-ms 120000
 ```
 

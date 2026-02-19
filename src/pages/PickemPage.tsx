@@ -119,6 +119,13 @@ export const PickemPage = () => {
   const totalPredictions = activeMatchIds.filter((id) => bracketPredictions[toScopedId(activeTab, id)]).length
   const getPrediction = (matchId: string) => bracketPredictions[toScopedId(activeTab, matchId)]
   const getScore = (matchId: string) => bracketScorePredictions[toScopedId(activeTab, matchId)]
+  const getOfficialScore = (matchId: string) => {
+    const result = matchResults[matchId]
+    if (result?.scoreA === undefined || result?.scoreB === undefined) {
+      return undefined
+    }
+    return { a: result.scoreA, b: result.scoreB }
+  }
   const getMatchPoints = (matchId: string) => {
     const result = matchResults[matchId]
     if (!result?.winnerSide) {
@@ -208,6 +215,9 @@ export const PickemPage = () => {
       }
     }
     loadResults()
+
+    const timer = setInterval(loadResults, 30000)
+    return () => clearInterval(timer)
   }, [activeTab, selectedTournamentId])
 
   useEffect(() => {
@@ -445,6 +455,7 @@ export const PickemPage = () => {
           groups={tournament.swissGroups}
           getPrediction={getPrediction}
           getScore={getScore}
+          getOfficialScore={getOfficialScore}
           getMatchPoints={getMatchPoints}
           onPick={pickForCurrentTab}
           onScoreChange={setScoreForCurrentTab}
@@ -455,6 +466,7 @@ export const PickemPage = () => {
           bracket={activeBracket}
           getPrediction={getPrediction}
           getScore={getScore}
+          getOfficialScore={getOfficialScore}
           getMatchPoints={getMatchPoints}
           onPick={pickForCurrentTab}
           onScoreChange={setScoreForCurrentTab}

@@ -700,6 +700,26 @@ select {
   letter-spacing: 0.03em;
 }
 
+.score-real-row {
+  font-weight: 700;
+}
+
+.score-real-value {
+  min-width: 1.8rem;
+  text-align: center;
+  border: 1px solid #4e67a7;
+  border-radius: 6px;
+  background: #101a38;
+  padding: 0.08rem 0.28rem;
+}
+
+.score-real-label {
+  color: #9fd2ff;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .swiss-center {
   display: grid;
   justify-items: center;

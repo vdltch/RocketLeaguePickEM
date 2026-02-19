@@ -5,6 +5,7 @@ type BracketBoardProps = {
   bracket: Bracket
   getPrediction: (matchId: string) => 'A' | 'B' | undefined
   getScore: (matchId: string) => { a?: number; b?: number } | undefined
+  getOfficialScore: (matchId: string) => { a: number; b: number } | undefined
   getMatchPoints: (matchId: string) => number | undefined
   onPick: (matchId: string, side: 'A' | 'B') => void
   onScoreChange: (matchId: string, side: 'A' | 'B', score?: number) => void
@@ -54,6 +55,7 @@ export const BracketBoard = ({
   bracket,
   getPrediction,
   getScore,
+  getOfficialScore,
   getMatchPoints,
   onPick,
   onScoreChange,
@@ -72,6 +74,7 @@ export const BracketBoard = ({
               const sideBLabel = resolveSlotLabel(match.sideB, matchMap, getPrediction)
               const picked = getPrediction(match.id)
               const score = getScore(match.id)
+              const officialScore = getOfficialScore(match.id)
               const points = getMatchPoints(match.id)
 
               return (
@@ -93,41 +96,52 @@ export const BracketBoard = ({
                   >
                     {sideBLabel}
                   </button>
-                  <div className="bracket-score-row">
-                    <input
-                      className="score-input"
-                      type="number"
-                      min={0}
-                      max={4}
-                      placeholder="0"
-                      disabled={disabled}
-                      value={score?.a ?? ''}
-                      onChange={(event) =>
-                        onScoreChange(
-                          match.id,
-                          'A',
-                          event.target.value === '' ? undefined : Number(event.target.value),
-                        )
-                      }
-                    />
-                    <span>:</span>
-                    <input
-                      className="score-input"
-                      type="number"
-                      min={0}
-                      max={4}
-                      placeholder="0"
-                      disabled={disabled}
-                      value={score?.b ?? ''}
-                      onChange={(event) =>
-                        onScoreChange(
-                          match.id,
-                          'B',
-                          event.target.value === '' ? undefined : Number(event.target.value),
-                        )
-                      }
-                    />
-                  </div>
+                  {officialScore ? (
+                    <>
+                      <div className="bracket-score-row score-real-row">
+                        <span className="score-real-value">{officialScore.a}</span>
+                        <span>:</span>
+                        <span className="score-real-value">{officialScore.b}</span>
+                      </div>
+                      <small className="score-real-label">Score reel</small>
+                    </>
+                  ) : (
+                    <div className="bracket-score-row">
+                      <input
+                        className="score-input"
+                        type="number"
+                        min={0}
+                        max={4}
+                        placeholder="0"
+                        disabled={disabled}
+                        value={score?.a ?? ''}
+                        onChange={(event) =>
+                          onScoreChange(
+                            match.id,
+                            'A',
+                            event.target.value === '' ? undefined : Number(event.target.value),
+                          )
+                        }
+                      />
+                      <span>:</span>
+                      <input
+                        className="score-input"
+                        type="number"
+                        min={0}
+                        max={4}
+                        placeholder="0"
+                        disabled={disabled}
+                        value={score?.b ?? ''}
+                        onChange={(event) =>
+                          onScoreChange(
+                            match.id,
+                            'B',
+                            event.target.value === '' ? undefined : Number(event.target.value),
+                          )
+                        }
+                      />
+                    </div>
+                  )}
                   {match.scheduledAt ? <small>{match.scheduledAt}</small> : null}
                 </article>
               )

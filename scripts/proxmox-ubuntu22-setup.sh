@@ -15,6 +15,7 @@ set -Eeuo pipefail
 #
 # Optional:
 #   --domain example.com
+#   --origin-scheme https|http|auto
 #   --app-user ubuntu
 #   --api-port 4000
 #   --web-port 4173
@@ -25,6 +26,7 @@ set -Eeuo pipefail
 APP_DIR="/var/www/html/RocketLeaguePickEM"
 APP_USER="root"
 DOMAIN="_"
+ORIGIN_SCHEME="auto"
 API_PORT="4000"
 WEB_PORT="4173"
 RESULTS_SYNC_MS="120000"
@@ -36,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --app-dir) APP_DIR="$2"; shift 2 ;;
     --app-user) APP_USER="$2"; shift 2 ;;
     --domain) DOMAIN="$2"; shift 2 ;;
+    --origin-scheme) ORIGIN_SCHEME="$2"; shift 2 ;;
     --api-port) API_PORT="$2"; shift 2 ;;
     --web-port) WEB_PORT="$2"; shift 2 ;;
     --results-sync-ms) RESULTS_SYNC_MS="$2"; shift 2 ;;
@@ -90,9 +93,25 @@ if [[ ! -f "${APP_DIR}/.env" && -f "${APP_DIR}/.env.example" ]]; then
 fi
 
 if [[ -f "${APP_DIR}/.env" ]]; then
+  if [[ -z "${DOMAIN}" || "${DOMAIN}" == "_" ]]; then
+    APP_HOST="localhost"
+    APP_SCHEME="http"
+  else
+    APP_HOST="${DOMAIN}"
+    if [[ "${ORIGIN_SCHEME}" == "auto" ]]; then
+      APP_SCHEME="https"
+    else
+      APP_SCHEME="${ORIGIN_SCHEME}"
+    fi
+  fi
+
   sed -i "s|^PORT=.*|PORT=${API_PORT}|g" "${APP_DIR}/.env" || true
-  sed -i "s|^CLIENT_ORIGIN=.*|CLIENT_ORIGIN=http://${DOMAIN:-localhost}|g" "${APP_DIR}/.env" || true
-  sed -i "s|^VITE_API_URL=.*|VITE_API_URL=http://${DOMAIN:-localhost}/api|g" "${APP_DIR}/.env" || true
+  sed -i "s|^CLIENT_ORIGIN=.*|CLIENT_ORIGIN=${APP_SCHEME}://${APP_HOST}|g" "${APP_DIR}/.env" || true
+  if [[ "${SKIP_APACHE}" == "0" ]]; then
+    sed -i "s|^VITE_API_URL=.*|VITE_API_URL=/api|g" "${APP_DIR}/.env" || true
+  else
+    sed -i "s|^VITE_API_URL=.*|VITE_API_URL=${APP_SCHEME}://${APP_HOST}:${API_PORT}/api|g" "${APP_DIR}/.env" || true
+  fi
   if grep -q '^RESULTS_SYNC_INTERVAL_MS=' "${APP_DIR}/.env"; then
     sed -i "s|^RESULTS_SYNC_INTERVAL_MS=.*|RESULTS_SYNC_INTERVAL_MS=${RESULTS_SYNC_MS}|g" "${APP_DIR}/.env" || true
   else

@@ -5,6 +5,7 @@ type SwissGroupsBoardProps = {
   groups: SwissGroup[]
   getPrediction: (matchId: string) => 'A' | 'B' | undefined
   getScore: (matchId: string) => { a?: number; b?: number } | undefined
+  getOfficialScore: (matchId: string) => { a: number; b: number } | undefined
   getMatchPoints: (matchId: string) => number | undefined
   onPick: (matchId: string, side: 'A' | 'B') => void
   onScoreChange: (matchId: string, side: 'A' | 'B', score?: number) => void
@@ -17,6 +18,7 @@ export const SwissGroupsBoard = ({
   groups,
   getPrediction,
   getScore,
+  getOfficialScore,
   getMatchPoints,
   onPick,
   onScoreChange,
@@ -60,6 +62,7 @@ export const SwissGroupsBoard = ({
                 .map((match) => {
                   const picked = getPrediction(match.id)
                   const score = getScore(match.id)
+                  const officialScore = getOfficialScore(match.id)
                   const points = getMatchPoints(match.id)
                   return (
                     <div key={match.id} className="swiss-match-row">
@@ -74,41 +77,50 @@ export const SwissGroupsBoard = ({
                       </button>
                       <div className="swiss-center">
                         <small className="match-format">BO5</small>
-                        <div className="swiss-score-row">
-                          <input
-                            className="score-input score-input-tight"
-                            type="number"
-                            min={0}
-                            max={3}
-                            placeholder="0"
-                            disabled={disabled}
-                            value={score?.a ?? ''}
-                            onChange={(event) =>
-                              onScoreChange(
-                                match.id,
-                                'A',
-                                event.target.value === '' ? undefined : Number(event.target.value),
-                              )
-                            }
-                          />
-                          <span>:</span>
-                          <input
-                            className="score-input score-input-tight"
-                            type="number"
-                            min={0}
-                            max={3}
-                            placeholder="0"
-                            disabled={disabled}
-                            value={score?.b ?? ''}
-                            onChange={(event) =>
-                              onScoreChange(
-                                match.id,
-                                'B',
-                                event.target.value === '' ? undefined : Number(event.target.value),
-                              )
-                            }
-                          />
-                        </div>
+                        {officialScore ? (
+                          <div className="swiss-score-row score-real-row">
+                            <span className="score-real-value">{officialScore.a}</span>
+                            <span>:</span>
+                            <span className="score-real-value">{officialScore.b}</span>
+                          </div>
+                        ) : (
+                          <div className="swiss-score-row">
+                            <input
+                              className="score-input score-input-tight"
+                              type="number"
+                              min={0}
+                              max={3}
+                              placeholder="0"
+                              disabled={disabled}
+                              value={score?.a ?? ''}
+                              onChange={(event) =>
+                                onScoreChange(
+                                  match.id,
+                                  'A',
+                                  event.target.value === '' ? undefined : Number(event.target.value),
+                                )
+                              }
+                            />
+                            <span>:</span>
+                            <input
+                              className="score-input score-input-tight"
+                              type="number"
+                              min={0}
+                              max={3}
+                              placeholder="0"
+                              disabled={disabled}
+                              value={score?.b ?? ''}
+                              onChange={(event) =>
+                                onScoreChange(
+                                  match.id,
+                                  'B',
+                                  event.target.value === '' ? undefined : Number(event.target.value),
+                                )
+                              }
+                            />
+                          </div>
+                        )}
+                        {officialScore ? <small className="score-real-label">Score reel</small> : null}
                         <svg viewBox="0 0 80 24" aria-hidden="true" className="swiss-connector">
                           <path d="M1 12h22M57 12h22M22 12h35" />
                           <circle cx="40" cy="12" r="5" />
