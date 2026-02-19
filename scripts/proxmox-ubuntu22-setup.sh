@@ -18,6 +18,7 @@ set -Eeuo pipefail
 #   --app-user ubuntu
 #   --api-port 4000
 #   --web-port 4173
+#   --results-sync-ms 120000
 #   --node-major 22
 #   --skip-apache
 
@@ -26,6 +27,7 @@ APP_USER="root"
 DOMAIN="_"
 API_PORT="4000"
 WEB_PORT="4173"
+RESULTS_SYNC_MS="120000"
 NODE_MAJOR="22"
 SKIP_APACHE="0"
 
@@ -36,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --domain) DOMAIN="$2"; shift 2 ;;
     --api-port) API_PORT="$2"; shift 2 ;;
     --web-port) WEB_PORT="$2"; shift 2 ;;
+    --results-sync-ms) RESULTS_SYNC_MS="$2"; shift 2 ;;
     --node-major) NODE_MAJOR="$2"; shift 2 ;;
     --skip-apache) SKIP_APACHE="1"; shift ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
@@ -88,6 +91,11 @@ if [[ -f "${APP_DIR}/.env" ]]; then
   sed -i "s|^PORT=.*|PORT=${API_PORT}|g" "${APP_DIR}/.env" || true
   sed -i "s|^CLIENT_ORIGIN=.*|CLIENT_ORIGIN=http://${DOMAIN:-localhost}|g" "${APP_DIR}/.env" || true
   sed -i "s|^VITE_API_URL=.*|VITE_API_URL=http://${DOMAIN:-localhost}/api|g" "${APP_DIR}/.env" || true
+  if grep -q '^RESULTS_SYNC_INTERVAL_MS=' "${APP_DIR}/.env"; then
+    sed -i "s|^RESULTS_SYNC_INTERVAL_MS=.*|RESULTS_SYNC_INTERVAL_MS=${RESULTS_SYNC_MS}|g" "${APP_DIR}/.env" || true
+  else
+    echo "RESULTS_SYNC_INTERVAL_MS=${RESULTS_SYNC_MS}" >>"${APP_DIR}/.env"
+  fi
 fi
 
 sudo -u "${APP_USER}" bash -lc "cd '${APP_DIR}' && npm run build"

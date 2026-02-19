@@ -6,11 +6,13 @@ import jwt from 'jsonwebtoken'
 import { z } from 'zod'
 import { initDb } from './db.js'
 import { authRequired } from './middleware/auth.js'
+import { startResultsSync, syncLiquipediaResults } from './results-sync.js'
 
 const app = express()
 const port = Number(process.env.PORT ?? 4000)
 const jwtSecret = process.env.JWT_SECRET ?? 'dev-secret-change-me'
 const clientOrigin = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173'
+const resultsSyncIntervalMs = Number(process.env.RESULTS_SYNC_INTERVAL_MS ?? 120000)
 
 app.use(
   cors({
@@ -310,6 +312,25 @@ app.put('/api/results', authRequired(jwtSecret), async (req, res) => {
     console.error(error)
     return res.status(500).json({ error: 'Erreur serveur' })
   }
+})
+
+app.post('/api/results/sync', authRequired(jwtSecret), async (_req, res) => {
+  try {
+    const changes = await syncLiquipediaResults(db)
+    if (changes > 0) {
+      await recalculateUserPoints()
+    }
+    return res.json({ ok: true, changes })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+startResultsSync({
+  db,
+  intervalMs: Number.isFinite(resultsSyncIntervalMs) && resultsSyncIntervalMs > 0 ? resultsSyncIntervalMs : 120000,
+  onChanges: recalculateUserPoints,
 })
 
 app.listen(port, () => {

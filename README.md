@@ -32,6 +32,7 @@ Copier `.env.example` vers `.env` puis ajuster si besoin.
 - `CLIENT_ORIGIN=http://localhost:5173`
 - `JWT_SECRET=change-me-in-production`
 - `VITE_API_URL=http://localhost:4000/api`
+- `RESULTS_SYNC_INTERVAL_MS=120000` (sync auto Liquipedia des résultats)
 
 ## Deployment Proxmox (Ubuntu 22.04)
 
@@ -45,7 +46,8 @@ Exemple d'utilisation sur la VM:
 sudo bash scripts/proxmox-ubuntu22-setup.sh \
   --app-dir /var/www/html/rocketleague-pickem \
   --app-user ubuntu \
-  --domain _
+  --domain _ \
+  --results-sync-ms 120000
 ```
 
 Pré-requis:
