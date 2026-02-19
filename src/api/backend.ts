@@ -35,6 +35,11 @@ export type RemoteResult = {
   scoreB?: number
 }
 
+export type RemoteMatchPoints = {
+  matchId: string
+  points: number
+}
+
 const request = async <T>(path: string, options: ApiOptions = {}) => {
   const response = await fetch(`${API_BASE}${path}`, {
     method: options.method ?? 'GET',
@@ -80,4 +85,10 @@ export const getLeaderboard = () => request<{ leaderboard: LeaderboardEntry[] }>
 export const getMatchResults = (tournamentId: string, tab: 'swiss' | 'playoffs') =>
   request<{ results: RemoteResult[] }>(
     `/results?tournamentId=${encodeURIComponent(tournamentId)}&tab=${encodeURIComponent(tab)}`,
+  )
+
+export const getUserMatchPoints = (token: string, tournamentId: string, tab: 'swiss' | 'playoffs') =>
+  request<{ pointsByMatch: RemoteMatchPoints[] }>(
+    `/picks/points?tournamentId=${encodeURIComponent(tournamentId)}&tab=${encodeURIComponent(tab)}`,
+    { token },
   )

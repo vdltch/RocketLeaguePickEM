@@ -215,6 +215,41 @@ app.get('/api/picks', authRequired(jwtSecret), async (req, res) => {
   return res.json({ picks: rows })
 })
 
+app.get('/api/picks/points', authRequired(jwtSecret), async (req, res) => {
+  const tournamentId = normalizeTournamentId(String(req.query.tournamentId ?? ''))
+  const tab = String(req.query.tab ?? '')
+  if (!tournamentId || (tab !== 'swiss' && tab !== 'playoffs')) {
+    return res.json({ pointsByMatch: [] })
+  }
+
+  const rows = await db.all(
+    `SELECT
+      p.match_id as matchId,
+      CASE
+        WHEN p.winner_side = r.winner_side
+         AND p.score_a IS NOT NULL
+         AND p.score_b IS NOT NULL
+         AND r.score_a IS NOT NULL
+         AND r.score_b IS NOT NULL
+         AND p.score_a = r.score_a
+         AND p.score_b = r.score_b
+        THEN 10
+        WHEN p.winner_side = r.winner_side
+        THEN 5
+        ELSE 0
+      END as points
+     FROM pick_predictions p
+     JOIN match_results r
+       ON p.tournament_id = r.tournament_id
+      AND p.tab = r.tab
+      AND p.match_id = r.match_id
+     WHERE p.user_id = ? AND p.tournament_id = ? AND p.tab = ? AND r.winner_side IN ('A', 'B')`,
+    [req.user.id, tournamentId, tab],
+  )
+
+  return res.json({ pointsByMatch: rows })
+})
+
 app.get('/api/results', async (req, res) => {
   const tournamentId = normalizeTournamentId(String(req.query.tournamentId ?? ''))
   const tab = String(req.query.tab ?? '')

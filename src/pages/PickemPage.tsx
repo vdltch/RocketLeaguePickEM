@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getMatchResults, getUserPicks, saveUserPicks } from '../api/backend'
+import { getMatchResults, getUserMatchPoints, getUserPicks, saveUserPicks } from '../api/backend'
 import { useAuth } from '../auth/auth-context'
 import { GlassCard } from '../components/ui/GlassCard'
 import { RocketGoalLoader } from '../components/ui/RocketGoalLoader'
@@ -31,6 +31,7 @@ export const PickemPage = () => {
   const [activeTab, setActiveTab] = useState<PickemTab>('swiss')
   const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'saving' | 'saved' | 'error' | 'locked'>('idle')
   const [matchResults, setMatchResults] = useState<Record<string, RemoteResult>>({})
+  const [pointsByMatch, setPointsByMatch] = useState<Record<string, number>>({})
   const isHydratingRef = useRef(false)
   const selectedTournamentId = useMemo(() => {
     if (selectedTournamentIdRaw) {
@@ -121,12 +122,16 @@ export const PickemPage = () => {
   const getScore = (matchId: string) => bracketScorePredictions[toScopedId(activeTab, matchId)]
   const getOfficialScore = (matchId: string) => {
     const result = matchResults[matchId]
-    if (result?.scoreA === undefined || result?.scoreB === undefined) {
+    if (!result?.winnerSide || result.scoreA === undefined || result.scoreB === undefined) {
       return undefined
     }
     return { a: result.scoreA, b: result.scoreB }
   }
   const getMatchPoints = (matchId: string) => {
+    if (isAuthenticated && pointsByMatch[matchId] !== undefined) {
+      return pointsByMatch[matchId]
+    }
+
     const result = matchResults[matchId]
     if (!result?.winnerSide) {
       return undefined
@@ -221,6 +226,29 @@ export const PickemPage = () => {
   }, [activeTab, selectedTournamentId])
 
   useEffect(() => {
+    const loadPointsByMatch = async () => {
+      if (!isAuthenticated || !token || !selectedTournamentId) {
+        setPointsByMatch({})
+        return
+      }
+
+      try {
+        const remote = await getUserMatchPoints(token, selectedTournamentId, activeTab)
+        const nextMap: Record<string, number> = {}
+        for (const item of remote.pointsByMatch) {
+          nextMap[item.matchId] = item.points
+        }
+        setPointsByMatch(nextMap)
+      } catch {
+        setPointsByMatch({})
+      }
+    }
+    loadPointsByMatch()
+    const timer = setInterval(loadPointsByMatch, 30000)
+    return () => clearInterval(timer)
+  }, [activeTab, isAuthenticated, selectedTournamentId, token])
+
+  useEffect(() => {
     const hydrate = async () => {
       if (!isAuthenticated || !token || !selectedTournamentId) {
         return
@@ -284,6 +312,12 @@ export const PickemPage = () => {
           }
         })
         await saveUserPicks(token, { tournamentId: selectedTournamentId, tab: activeTab, picks: payload })
+        const pointsRemote = await getUserMatchPoints(token, selectedTournamentId, activeTab)
+        const pointsMap: Record<string, number> = {}
+        for (const item of pointsRemote.pointsByMatch) {
+          pointsMap[item.matchId] = item.points
+        }
+        setPointsByMatch(pointsMap)
         setSyncStatus('saved')
       } catch (error) {
         if (error instanceof Error && error.message.toLowerCase().includes('verrouille')) {
