@@ -39,6 +39,18 @@ export const initDb = async () => {
       UNIQUE(user_id, tournament_id, tab, match_id),
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS match_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tournament_id TEXT NOT NULL,
+      tab TEXT NOT NULL,
+      match_id TEXT NOT NULL,
+      winner_side TEXT,
+      score_a INTEGER,
+      score_b INTEGER,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(tournament_id, tab, match_id)
+    );
   `)
 
   // Backfill for existing databases created before the `points` column existed.

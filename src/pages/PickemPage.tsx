@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getUserPicks, saveUserPicks } from '../api/backend'
+import { getMatchResults, getUserPicks, saveUserPicks } from '../api/backend'
 import { useAuth } from '../auth/auth-context'
 import { GlassCard } from '../components/ui/GlassCard'
 import { RocketGoalLoader } from '../components/ui/RocketGoalLoader'
@@ -10,6 +10,7 @@ import { useTournaments } from '../hooks/useEsportData'
 import { usePickemStore } from '../store/pickemStore'
 import { resolveTeamProfile } from '../data/teamProfiles'
 import type { TournamentTeamProfile } from '../types/esport'
+import type { RemoteResult } from '../api/backend'
 
 type PickemTab = 'swiss' | 'playoffs'
 
@@ -28,7 +29,8 @@ export const PickemPage = () => {
 
   const [selectedTournamentIdRaw, setSelectedTournamentId] = useState<string>('')
   const [activeTab, setActiveTab] = useState<PickemTab>('swiss')
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'saving' | 'saved' | 'error'>('idle')
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'saving' | 'saved' | 'error' | 'locked'>('idle')
+  const [matchResults, setMatchResults] = useState<Record<string, RemoteResult>>({})
   const isHydratingRef = useRef(false)
   const selectedTournamentId = useMemo(() => {
     if (selectedTournamentIdRaw) {
@@ -45,6 +47,13 @@ export const PickemPage = () => {
     () => tournamentsQuery.data?.find((item) => item.id === selectedTournamentId),
     [selectedTournamentId, tournamentsQuery.data],
   )
+  const isTournamentLocked = useMemo(() => {
+    if (!tournament?.startDate) {
+      return false
+    }
+    const lockDate = new Date(`${tournament.startDate}T00:00:00Z`)
+    return Date.now() >= lockDate.getTime()
+  }, [tournament?.startDate])
   const tournamentTeams = useMemo(() => {
     if (!tournament) {
       return []
@@ -110,9 +119,42 @@ export const PickemPage = () => {
   const totalPredictions = activeMatchIds.filter((id) => bracketPredictions[toScopedId(activeTab, id)]).length
   const getPrediction = (matchId: string) => bracketPredictions[toScopedId(activeTab, matchId)]
   const getScore = (matchId: string) => bracketScorePredictions[toScopedId(activeTab, matchId)]
-  const pickForCurrentTab = (matchId: string, side: 'A' | 'B') =>
+  const getMatchPoints = (matchId: string) => {
+    const result = matchResults[matchId]
+    if (!result?.winnerSide) {
+      return undefined
+    }
+
+    const scoped = toScopedId(activeTab, matchId)
+    const predictedWinner = bracketPredictions[scoped]
+    if (!predictedWinner || predictedWinner !== result.winnerSide) {
+      return 0
+    }
+
+    const predictedScore = bracketScorePredictions[scoped]
+    if (
+      predictedScore?.a !== undefined &&
+      predictedScore?.b !== undefined &&
+      result.scoreA !== undefined &&
+      result.scoreB !== undefined &&
+      predictedScore.a === result.scoreA &&
+      predictedScore.b === result.scoreB
+    ) {
+      return 10
+    }
+
+    return 5
+  }
+  const pickForCurrentTab = (matchId: string, side: 'A' | 'B') => {
+    if (isTournamentLocked) {
+      return
+    }
     pickBracketWinner(toScopedId(activeTab, matchId), side)
+  }
   const setScoreForCurrentTab = (matchId: string, side: 'A' | 'B', score?: number) => {
+    if (isTournamentLocked) {
+      return
+    }
     const scopedId = toScopedId(activeTab, matchId)
     const current = bracketScorePredictions[scopedId] ?? {}
 
@@ -146,6 +188,27 @@ export const PickemPage = () => {
       setUsername(user.username)
     }
   }, [setUsername, user?.username])
+
+  useEffect(() => {
+    const loadResults = async () => {
+      if (!selectedTournamentId) {
+        setMatchResults({})
+        return
+      }
+
+      try {
+        const remote = await getMatchResults(selectedTournamentId, activeTab)
+        const nextMap: Record<string, RemoteResult> = {}
+        for (const item of remote.results) {
+          nextMap[item.matchId] = item
+        }
+        setMatchResults(nextMap)
+      } catch {
+        setMatchResults({})
+      }
+    }
+    loadResults()
+  }, [activeTab, selectedTournamentId])
 
   useEffect(() => {
     const hydrate = async () => {
@@ -193,7 +256,7 @@ export const PickemPage = () => {
   ])
 
   useEffect(() => {
-    if (!isAuthenticated || !token || !selectedTournamentId || isHydratingRef.current) {
+    if (!isAuthenticated || !token || !selectedTournamentId || isHydratingRef.current || isTournamentLocked) {
       return
     }
 
@@ -212,8 +275,12 @@ export const PickemPage = () => {
         })
         await saveUserPicks(token, { tournamentId: selectedTournamentId, tab: activeTab, picks: payload })
         setSyncStatus('saved')
-      } catch {
-        setSyncStatus('error')
+      } catch (error) {
+        if (error instanceof Error && error.message.toLowerCase().includes('verrouille')) {
+          setSyncStatus('locked')
+        } else {
+          setSyncStatus('error')
+        }
       }
     }, 500)
 
@@ -224,6 +291,7 @@ export const PickemPage = () => {
     bracketPredictions,
     bracketScorePredictions,
     isAuthenticated,
+    isTournamentLocked,
     selectedTournamentId,
     toScopedId,
     token,
@@ -272,6 +340,7 @@ export const PickemPage = () => {
           <p>
             {totalPredictions}/{activeMatchIds.length} matchs pronostiques
           </p>
+          {isTournamentLocked ? <small>Pick em verrouille depuis le debut du tournoi.</small> : null}
           {isAuthenticated ? <small>Sync BDD: {syncStatus}</small> : <small>Connecte-toi pour sauvegarder en BDD.</small>}
         </div>
         <div className="right">
@@ -283,6 +352,7 @@ export const PickemPage = () => {
           <button
             type="button"
             className="button button-ghost"
+            disabled={isTournamentLocked}
             onClick={() => {
               const ids = activeMatchIds.map((id) => toScopedId(activeTab, id))
               clearBracketPredictions(ids)
@@ -375,16 +445,20 @@ export const PickemPage = () => {
           groups={tournament.swissGroups}
           getPrediction={getPrediction}
           getScore={getScore}
+          getMatchPoints={getMatchPoints}
           onPick={pickForCurrentTab}
           onScoreChange={setScoreForCurrentTab}
+          disabled={isTournamentLocked}
         />
       ) : activeBracket ? (
         <BracketBoard
           bracket={activeBracket}
           getPrediction={getPrediction}
           getScore={getScore}
+          getMatchPoints={getMatchPoints}
           onPick={pickForCurrentTab}
           onScoreChange={setScoreForCurrentTab}
+          disabled={isTournamentLocked}
         />
       ) : (
         <GlassCard>

@@ -5,8 +5,10 @@ type BracketBoardProps = {
   bracket: Bracket
   getPrediction: (matchId: string) => 'A' | 'B' | undefined
   getScore: (matchId: string) => { a?: number; b?: number } | undefined
+  getMatchPoints: (matchId: string) => number | undefined
   onPick: (matchId: string, side: 'A' | 'B') => void
   onScoreChange: (matchId: string, side: 'A' | 'B', score?: number) => void
+  disabled?: boolean
 }
 
 const flattenMatches = (rounds: BracketRound[]) =>
@@ -48,7 +50,15 @@ const resolveSlotLabel = (
   return resolveSlotLabel(oppositeSlot, matchMap, getPrediction, depth + 1)
 }
 
-export const BracketBoard = ({ bracket, getPrediction, getScore, onPick, onScoreChange }: BracketBoardProps) => {
+export const BracketBoard = ({
+  bracket,
+  getPrediction,
+  getScore,
+  getMatchPoints,
+  onPick,
+  onScoreChange,
+  disabled = false,
+}: BracketBoardProps) => {
   const matchMap = flattenMatches(bracket.rounds)
 
   return (
@@ -62,12 +72,15 @@ export const BracketBoard = ({ bracket, getPrediction, getScore, onPick, onScore
               const sideBLabel = resolveSlotLabel(match.sideB, matchMap, getPrediction)
               const picked = getPrediction(match.id)
               const score = getScore(match.id)
+              const points = getMatchPoints(match.id)
 
               return (
                 <article key={match.id} className="bracket-match">
+                  {points !== undefined ? <small className="match-points">+{points} pts</small> : null}
                   <button
                     type="button"
                     className={clsx('bracket-team', picked === 'A' && 'bracket-team-active')}
+                    disabled={disabled}
                     onClick={() => onPick(match.id, 'A')}
                   >
                     {sideALabel}
@@ -75,6 +88,7 @@ export const BracketBoard = ({ bracket, getPrediction, getScore, onPick, onScore
                   <button
                     type="button"
                     className={clsx('bracket-team', picked === 'B' && 'bracket-team-active')}
+                    disabled={disabled}
                     onClick={() => onPick(match.id, 'B')}
                   >
                     {sideBLabel}
@@ -86,6 +100,7 @@ export const BracketBoard = ({ bracket, getPrediction, getScore, onPick, onScore
                       min={0}
                       max={4}
                       placeholder="0"
+                      disabled={disabled}
                       value={score?.a ?? ''}
                       onChange={(event) =>
                         onScoreChange(
@@ -102,6 +117,7 @@ export const BracketBoard = ({ bracket, getPrediction, getScore, onPick, onScore
                       min={0}
                       max={4}
                       placeholder="0"
+                      disabled={disabled}
                       value={score?.b ?? ''}
                       onChange={(event) =>
                         onScoreChange(

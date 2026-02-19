@@ -5,13 +5,23 @@ type SwissGroupsBoardProps = {
   groups: SwissGroup[]
   getPrediction: (matchId: string) => 'A' | 'B' | undefined
   getScore: (matchId: string) => { a?: number; b?: number } | undefined
+  getMatchPoints: (matchId: string) => number | undefined
   onPick: (matchId: string, side: 'A' | 'B') => void
   onScoreChange: (matchId: string, side: 'A' | 'B', score?: number) => void
+  disabled?: boolean
 }
 
 const rounds: Array<1 | 2 | 3> = [1, 2, 3]
 
-export const SwissGroupsBoard = ({ groups, getPrediction, getScore, onPick, onScoreChange }: SwissGroupsBoardProps) => (
+export const SwissGroupsBoard = ({
+  groups,
+  getPrediction,
+  getScore,
+  getMatchPoints,
+  onPick,
+  onScoreChange,
+  disabled = false,
+}: SwissGroupsBoardProps) => (
   <div className="swiss-groups-grid">
     {groups.map((group) => (
       <section key={group.id} className="swiss-group-card">
@@ -50,11 +60,14 @@ export const SwissGroupsBoard = ({ groups, getPrediction, getScore, onPick, onSc
                 .map((match) => {
                   const picked = getPrediction(match.id)
                   const score = getScore(match.id)
+                  const points = getMatchPoints(match.id)
                   return (
                     <div key={match.id} className="swiss-match-row">
+                      {points !== undefined ? <small className="match-points">+{points} pts</small> : null}
                       <button
                         type="button"
                         className={clsx('swiss-team-btn', picked === 'A' && 'swiss-team-btn-active')}
+                        disabled={disabled}
                         onClick={() => onPick(match.id, 'A')}
                       >
                         {match.sideA}
@@ -68,6 +81,7 @@ export const SwissGroupsBoard = ({ groups, getPrediction, getScore, onPick, onSc
                             min={0}
                             max={3}
                             placeholder="0"
+                            disabled={disabled}
                             value={score?.a ?? ''}
                             onChange={(event) =>
                               onScoreChange(
@@ -84,6 +98,7 @@ export const SwissGroupsBoard = ({ groups, getPrediction, getScore, onPick, onSc
                             min={0}
                             max={3}
                             placeholder="0"
+                            disabled={disabled}
                             value={score?.b ?? ''}
                             onChange={(event) =>
                               onScoreChange(
@@ -102,6 +117,7 @@ export const SwissGroupsBoard = ({ groups, getPrediction, getScore, onPick, onSc
                       <button
                         type="button"
                         className={clsx('swiss-team-btn', picked === 'B' && 'swiss-team-btn-active')}
+                        disabled={disabled}
                         onClick={() => onPick(match.id, 'B')}
                       >
                         {match.sideB}

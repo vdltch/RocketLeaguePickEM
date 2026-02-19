@@ -44,6 +44,40 @@ const picksSchema = z.object({
   ),
 })
 
+const resultsSchema = z.object({
+  tournamentId: z.string().min(1),
+  tab: z.enum(['swiss', 'playoffs']),
+  results: z.array(
+    z.object({
+      matchId: z.string().min(1),
+      winnerSide: z.union([z.enum(['A', 'B']), z.null()]).optional(),
+      scoreA: z.union([z.number().int().min(0).max(10), z.null()]).optional(),
+      scoreB: z.union([z.number().int().min(0).max(10), z.null()]).optional(),
+    }),
+  ),
+})
+
+const tournamentStartDates = {
+  'rlcs-2026-boston-major-1': '2026-02-19',
+  'rlcs-2026-paris-major-2': '2026-05-20',
+}
+
+const getTournamentLockDate = (tournamentId) => {
+  const startDate = tournamentStartDates[tournamentId]
+  if (!startDate) {
+    return null
+  }
+  return new Date(`${startDate}T00:00:00Z`)
+}
+
+const isTournamentLocked = (tournamentId) => {
+  const lockDate = getTournamentLockDate(tournamentId)
+  if (!lockDate) {
+    return false
+  }
+  return Date.now() >= lockDate.getTime()
+}
+
 const signToken = (user) =>
   jwt.sign(
     {
@@ -57,18 +91,59 @@ const signToken = (user) =>
 
 const db = await initDb()
 
+const recalculateUserPoints = async () => {
+  const totals = await db.all(
+    `SELECT
+      p.user_id as userId,
+      SUM(
+        CASE
+          WHEN p.winner_side = r.winner_side
+           AND p.score_a IS NOT NULL
+           AND p.score_b IS NOT NULL
+           AND r.score_a IS NOT NULL
+           AND r.score_b IS NOT NULL
+           AND p.score_a = r.score_a
+           AND p.score_b = r.score_b
+          THEN 10
+          WHEN p.winner_side = r.winner_side
+          THEN 5
+          ELSE 0
+        END
+      ) as points
+     FROM pick_predictions p
+     JOIN match_results r
+       ON p.tournament_id = r.tournament_id
+      AND p.tab = r.tab
+      AND p.match_id = r.match_id
+     WHERE r.winner_side IN ('A', 'B')
+     GROUP BY p.user_id`,
+  )
+
+  await db.exec('BEGIN')
+  try {
+    await db.run('UPDATE users SET points = 0')
+    for (const item of totals) {
+      await db.run('UPDATE users SET points = ? WHERE id = ?', [Number(item.points ?? 0), item.userId])
+    }
+    await db.exec('COMMIT')
+  } catch (error) {
+    await db.exec('ROLLBACK')
+    throw error
+  }
+}
+
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
 app.post('/api/auth/register', async (req, res) => {
   const parsed = registerSchema.safeParse(req.body)
   if (!parsed.success) {
-    return res.status(400).json({ error: 'DonnÈes invalides', details: parsed.error.issues })
+    return res.status(400).json({ error: 'Donnees invalides', details: parsed.error.issues })
   }
 
   const { username, email, password } = parsed.data
   const existing = await db.get('SELECT id FROM users WHERE email = ?', email.toLowerCase())
   if (existing) {
-    return res.status(409).json({ error: 'Email d√©j√† utilis√©' })
+    return res.status(409).json({ error: 'Email deja utilise' })
   }
 
   const passwordHash = await bcrypt.hash(password, 10)
@@ -86,7 +161,7 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const parsed = loginSchema.safeParse(req.body)
   if (!parsed.success) {
-    return res.status(400).json({ error: 'DonnÈes invalides', details: parsed.error.issues })
+    return res.status(400).json({ error: 'Donnees invalides', details: parsed.error.issues })
   }
 
   const { email, password } = parsed.data
@@ -129,7 +204,24 @@ app.get('/api/picks', authRequired(jwtSecret), async (req, res) => {
   return res.json({ picks: rows })
 })
 
+app.get('/api/results', async (req, res) => {
+  const tournamentId = String(req.query.tournamentId ?? '')
+  const tab = String(req.query.tab ?? '')
+  if (!tournamentId || (tab !== 'swiss' && tab !== 'playoffs')) {
+    return res.json({ results: [] })
+  }
+
+  const rows = await db.all(
+    `SELECT match_id as matchId, winner_side as winnerSide, score_a as scoreA, score_b as scoreB
+     FROM match_results
+     WHERE tournament_id = ? AND tab = ?`,
+    [tournamentId, tab],
+  )
+  return res.json({ results: rows })
+})
+
 app.get('/api/leaderboard', async (_req, res) => {
+  await recalculateUserPoints()
   const rows = await db.all(
     `SELECT
       u.id as userId,
@@ -144,10 +236,16 @@ app.get('/api/leaderboard', async (_req, res) => {
 app.put('/api/picks', authRequired(jwtSecret), async (req, res) => {
   const parsed = picksSchema.safeParse(req.body)
   if (!parsed.success) {
-    return res.status(400).json({ error: 'DonnÈes invalides', details: parsed.error.issues })
+    return res.status(400).json({ error: 'Donnees invalides', details: parsed.error.issues })
   }
 
   const { tournamentId, tab, picks } = parsed.data
+  if (isTournamentLocked(tournamentId)) {
+    const lockDate = getTournamentLockDate(tournamentId)
+    const isoDate = lockDate ? lockDate.toISOString().slice(0, 10) : tournamentId
+    return res.status(423).json({ error: `Pick em verrouille depuis le ${isoDate}` })
+  }
+
   await db.exec('BEGIN')
   try {
     await db.run('DELETE FROM pick_predictions WHERE user_id = ? AND tournament_id = ? AND tab = ?', [
@@ -168,6 +266,44 @@ app.put('/api/picks', authRequired(jwtSecret), async (req, res) => {
     }
 
     await db.exec('COMMIT')
+    await recalculateUserPoints()
+    return res.json({ ok: true })
+  } catch (error) {
+    await db.exec('ROLLBACK')
+    console.error(error)
+    return res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+app.put('/api/results', authRequired(jwtSecret), async (req, res) => {
+  const parsed = resultsSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Donnees invalides', details: parsed.error.issues })
+  }
+
+  const { tournamentId, tab, results } = parsed.data
+  await db.exec('BEGIN')
+  try {
+    for (const result of results) {
+      if (!result.winnerSide && result.scoreA === undefined && result.scoreB === undefined) {
+        continue
+      }
+
+      await db.run(
+        `INSERT INTO match_results (tournament_id, tab, match_id, winner_side, score_a, score_b, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(tournament_id, tab, match_id)
+         DO UPDATE SET
+          winner_side = excluded.winner_side,
+          score_a = excluded.score_a,
+          score_b = excluded.score_b,
+          updated_at = CURRENT_TIMESTAMP`,
+        [tournamentId, tab, result.matchId, result.winnerSide ?? null, result.scoreA ?? null, result.scoreB ?? null],
+      )
+    }
+
+    await db.exec('COMMIT')
+    await recalculateUserPoints()
     return res.json({ ok: true })
   } catch (error) {
     await db.exec('ROLLBACK')
@@ -177,7 +313,5 @@ app.put('/api/picks', authRequired(jwtSecret), async (req, res) => {
 })
 
 app.listen(port, () => {
-  console.log(`API d√©marr√©e sur http://localhost:${port}`)
+  console.log(`API demarree sur http://localhost:${port}`)
 })
-
-
