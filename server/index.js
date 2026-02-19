@@ -102,6 +102,54 @@ const signToken = (user) =>
 
 const db = await initDb()
 
+const migrateTournamentAliases = async () => {
+  const aliasEntries = Object.entries(tournamentIdAliases).filter(([alias, canonical]) => alias !== canonical)
+  if (aliasEntries.length === 0) {
+    return
+  }
+
+  await db.exec('BEGIN')
+  try {
+    for (const [alias, canonical] of aliasEntries) {
+      await db.run(
+        `INSERT INTO pick_predictions (user_id, tournament_id, tab, match_id, winner_side, score_a, score_b, updated_at)
+         SELECT user_id, ?, tab, match_id, winner_side, score_a, score_b, updated_at
+         FROM pick_predictions
+         WHERE tournament_id = ?
+         ON CONFLICT(user_id, tournament_id, tab, match_id)
+         DO UPDATE SET
+          winner_side = excluded.winner_side,
+          score_a = excluded.score_a,
+          score_b = excluded.score_b,
+          updated_at = excluded.updated_at`,
+        [canonical, alias],
+      )
+
+      await db.run(
+        `INSERT INTO match_results (tournament_id, tab, match_id, winner_side, score_a, score_b, updated_at)
+         SELECT ?, tab, match_id, winner_side, score_a, score_b, updated_at
+         FROM match_results
+         WHERE tournament_id = ?
+         ON CONFLICT(tournament_id, tab, match_id)
+         DO UPDATE SET
+          winner_side = excluded.winner_side,
+          score_a = excluded.score_a,
+          score_b = excluded.score_b,
+          updated_at = excluded.updated_at`,
+        [canonical, alias],
+      )
+
+      await db.run(`DELETE FROM pick_predictions WHERE tournament_id = ?`, [alias])
+      await db.run(`DELETE FROM match_results WHERE tournament_id = ?`, [alias])
+    }
+
+    await db.exec('COMMIT')
+  } catch (error) {
+    await db.exec('ROLLBACK')
+    throw error
+  }
+}
+
 const recalculateUserPoints = async () => {
   const totals = await db.all(
     `SELECT
@@ -142,6 +190,8 @@ const recalculateUserPoints = async () => {
     throw error
   }
 }
+
+await migrateTournamentAliases()
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
@@ -295,19 +345,24 @@ app.put('/api/picks', authRequired(jwtSecret), async (req, res) => {
 
   await db.exec('BEGIN')
   try {
-    await db.run('DELETE FROM pick_predictions WHERE user_id = ? AND tournament_id = ? AND tab = ?', [
-      req.user.id,
-      tournamentId,
-      tab,
-    ])
-
     for (const pick of picks) {
       if (!pick.winnerSide && pick.scoreA === undefined && pick.scoreB === undefined) {
+        await db.run(
+          `DELETE FROM pick_predictions
+           WHERE user_id = ? AND tournament_id = ? AND tab = ? AND match_id = ?`,
+          [req.user.id, tournamentId, tab, pick.matchId],
+        )
         continue
       }
       await db.run(
         `INSERT INTO pick_predictions (user_id, tournament_id, tab, match_id, winner_side, score_a, score_b, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(user_id, tournament_id, tab, match_id)
+         DO UPDATE SET
+          winner_side = excluded.winner_side,
+          score_a = excluded.score_a,
+          score_b = excluded.score_b,
+          updated_at = CURRENT_TIMESTAMP`,
         [req.user.id, tournamentId, tab, pick.matchId, pick.winnerSide ?? null, pick.scoreA ?? null, pick.scoreB ?? null],
       )
     }
